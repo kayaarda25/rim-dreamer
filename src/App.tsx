@@ -8,6 +8,9 @@ import Index from "./pages/Index";
 import CatalogPage from "./pages/CatalogPage";
 import ResultPage from "./pages/ResultPage";
 import ThreeDPage from "./pages/ThreeDPage";
+import ReconstructionUploadPage from "./pages/ReconstructionUploadPage";
+import ReconstructionStatusPage from "./pages/ReconstructionStatusPage";
+import ReconstructionViewerPage from "./pages/ReconstructionViewerPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -24,6 +27,9 @@ const App = () => (
           <Route path="/try-it" element={<ThreeDPage />} />
           <Route path="/catalog" element={<CatalogPage />} />
           <Route path="/result" element={<ResultPage />} />
+          <Route path="/reconstruction/new" element={<ReconstructionUploadPage />} />
+          <Route path="/reconstruction/:projectId" element={<ReconstructionStatusPage />} />
+          <Route path="/reconstruction/:projectId/view" element={<ReconstructionViewerPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
