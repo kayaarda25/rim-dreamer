@@ -155,11 +155,20 @@ def export_splat(model_dir, output_path):
 def upload_to_storage(local_path, storage_path):
     """Upload file to Supabase Storage."""
     if STORAGE_BASE:
+        # Determine content type
+        ext = str(local_path).rsplit(".", 1)[-1].lower()
+        content_types = {"splat": "application/octet-stream", "ply": "application/octet-stream", "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png"}
+        content_type = content_types.get(ext, "application/octet-stream")
+
         with open(local_path, "rb") as f:
             resp = requests.post(
                 f"{STORAGE_BASE}/object/reconstructions/{storage_path}",
-                files={"file": f},
-                headers={"Authorization": f"Bearer {os.environ.get('SUPABASE_SERVICE_ROLE_KEY', '')}"},
+                data=f.read(),
+                headers={
+                    "Authorization": f"Bearer {os.environ.get('SUPABASE_SERVICE_ROLE_KEY', '')}",
+                    "Content-Type": content_type,
+                    "x-upsert": "true",
+                },
             )
             resp.raise_for_status()
             return f"{STORAGE_BASE}/object/public/reconstructions/{storage_path}"
