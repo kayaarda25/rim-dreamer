@@ -78,7 +78,7 @@ def run_colmap(images_dir, output_dir):
     sparse_dir = output_dir / "sparse"
     sparse_dir.mkdir(parents=True, exist_ok=True)
 
-    use_gpu = "1" if _detect_gpu() else "0"
+    use_gpu = "0"  # Force CPU — COLMAP not compiled with GPU support
     print(f"COLMAP using GPU: {use_gpu}")
 
     subprocess.run([
