@@ -14,3 +14,9 @@ verify_jwt = false
 
 [functions.proxy-model]
 verify_jwt = false
+
+[functions.start-reconstruction]
+verify_jwt = false
+
+[functions.worker-callback]
+verify_jwt = false

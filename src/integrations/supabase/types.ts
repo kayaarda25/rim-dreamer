@@ -14,7 +14,80 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      reconstruction_files: {
+        Row: {
+          created_at: string
+          file_type: Database["public"]["Enums"]["project_file_type"]
+          file_url: string
+          id: string
+          project_id: string
+        }
+        Insert: {
+          created_at?: string
+          file_type?: Database["public"]["Enums"]["project_file_type"]
+          file_url: string
+          id?: string
+          project_id: string
+        }
+        Update: {
+          created_at?: string
+          file_type?: Database["public"]["Enums"]["project_file_type"]
+          file_url?: string
+          id?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reconstruction_files_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "reconstruction_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reconstruction_projects: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          id: string
+          input_type: Database["public"]["Enums"]["reconstruction_input_type"]
+          logs: string | null
+          model_url: string | null
+          preview_url: string | null
+          progress_stage: Database["public"]["Enums"]["progress_stage"] | null
+          status: Database["public"]["Enums"]["reconstruction_status"]
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          input_type?: Database["public"]["Enums"]["reconstruction_input_type"]
+          logs?: string | null
+          model_url?: string | null
+          preview_url?: string | null
+          progress_stage?: Database["public"]["Enums"]["progress_stage"] | null
+          status?: Database["public"]["Enums"]["reconstruction_status"]
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          input_type?: Database["public"]["Enums"]["reconstruction_input_type"]
+          logs?: string | null
+          model_url?: string | null
+          preview_url?: string | null
+          progress_stage?: Database["public"]["Enums"]["progress_stage"] | null
+          status?: Database["public"]["Enums"]["reconstruction_status"]
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +96,15 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      progress_stage:
+        | "uploading"
+        | "preparing_images"
+        | "colmap"
+        | "training_splats"
+        | "exporting"
+      project_file_type: "image" | "video" | "frame"
+      reconstruction_input_type: "images" | "video"
+      reconstruction_status: "queued" | "processing" | "done" | "failed"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +231,17 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      progress_stage: [
+        "uploading",
+        "preparing_images",
+        "colmap",
+        "training_splats",
+        "exporting",
+      ],
+      project_file_type: ["image", "video", "frame"],
+      reconstruction_input_type: ["images", "video"],
+      reconstruction_status: ["queued", "processing", "done", "failed"],
+    },
   },
 } as const
