@@ -60,6 +60,7 @@ Maintain the tire rubber around the new rims.`;
       },
       body: JSON.stringify({
         model: "google/gemini-3-pro-image-preview",
+        modalities: ["image", "text"],
         messages: [
           {
             role: "user",

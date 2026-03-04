@@ -109,31 +109,28 @@ const ThreeDPage = () => {
     setSelectedRim(rim);
     if (!image) return;
 
-    // Custom uploaded rims: only apply to 3D viewer (no AI rendering)
-    if (rim.id.startsWith("custom-")) {
-      setShowRendered(false);
-      setRenderedImage(null);
-      toast.success(`${rim.name} ausgewählt — Farbe wird auf 3D-Modell angewendet`);
-      return;
-    }
-
     setRimRendering(true);
     setRenderedImage(null);
     try {
-      // Convert local rim image to base64 data URI for the AI API
-      const rimBase64 = await new Promise<string>((resolve, reject) => {
-        const img = new Image();
-        img.crossOrigin = "anonymous";
-        img.onload = () => {
-          const canvas = document.createElement("canvas");
-          canvas.width = img.width;
-          canvas.height = img.height;
-          canvas.getContext("2d")!.drawImage(img, 0, 0);
-          resolve(canvas.toDataURL("image/jpeg", 0.9));
-        };
-        img.onerror = reject;
-        img.src = rim.image;
-      });
+      // For custom rims, image is already a data URL; for catalog rims, convert
+      let rimBase64: string;
+      if (rim.image.startsWith("data:")) {
+        rimBase64 = rim.image;
+      } else {
+        rimBase64 = await new Promise<string>((resolve, reject) => {
+          const img = new Image();
+          img.crossOrigin = "anonymous";
+          img.onload = () => {
+            const canvas = document.createElement("canvas");
+            canvas.width = img.width;
+            canvas.height = img.height;
+            canvas.getContext("2d")!.drawImage(img, 0, 0);
+            resolve(canvas.toDataURL("image/jpeg", 0.9));
+          };
+          img.onerror = reject;
+          img.src = rim.image;
+        });
+      }
 
       const detection = await detectWheels(image);
       const result = await renderRims({
