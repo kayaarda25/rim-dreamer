@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.check-3d-status]
 verify_jwt = false
+
+[functions.proxy-model]
+verify_jwt = false
