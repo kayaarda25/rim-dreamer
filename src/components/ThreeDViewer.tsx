@@ -173,17 +173,25 @@ const ThreeDViewer = ({ modelUrl }: ThreeDViewerProps) => {
 
   return (
     <div
-      className="w-full aspect-video rounded-2xl overflow-hidden"
-      style={{ background: "radial-gradient(ellipse at center, #ffffff 0%, #e8e8e8 60%, #d0d0d0 100%)" }}
+      className="w-full rounded-2xl overflow-hidden"
+      style={{
+        background: "radial-gradient(ellipse at center, #ffffff 0%, #e8e8e8 60%, #d0d0d0 100%)",
+        aspectRatio: "16/9",
+        minHeight: "480px",
+      }}
     >
       <Canvas
         camera={{ position: [4, 2, 4], fov: 35 }}
         shadows
+        dpr={[1, 2]}
         gl={{
           antialias: true,
           toneMapping: THREE.ACESFilmicToneMapping,
           toneMappingExposure: 1.8,
+          powerPreference: "high-performance",
+          pixelRatio: window.devicePixelRatio,
         }}
+        style={{ width: "100%", height: "100%" }}
       >
         {/* Strong ambient for overall brightness */}
         <ambientLight intensity={1.0} />
