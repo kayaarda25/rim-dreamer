@@ -8,20 +8,59 @@ import ThreeDViewer from "@/components/ThreeDViewer";
 import RimConfigurator from "@/components/RimConfigurator";
 import { type Rim } from "@/data/rims";
 
+const STORAGE_KEY = "threed-session";
+
+interface StoredSession {
+  image: string;
+  taskId: string;
+  status: ThreeDStatus | null;
+}
+
+function loadSession(): StoredSession | null {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch { return null; }
+}
+
+function saveSession(session: StoredSession | null) {
+  if (!session) {
+    sessionStorage.removeItem(STORAGE_KEY);
+  } else {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+  }
+}
+
 const ThreeDPage = () => {
   const navigate = useNavigate();
-  const [image, setImage] = useState<string | null>(null);
-  const [taskId, setTaskId] = useState<string | null>(null);
-  const [status, setStatus] = useState<ThreeDStatus | null>(null);
-  const [generating, setGenerating] = useState(false);
+
+  // Restore from session
+  const saved = useRef(loadSession());
+  const [image, setImage] = useState<string | null>(saved.current?.image ?? null);
+  const [taskId, setTaskId] = useState<string | null>(saved.current?.taskId ?? null);
+  const [status, setStatus] = useState<ThreeDStatus | null>(saved.current?.status ?? null);
+  const [generating, setGenerating] = useState(() => {
+    const s = saved.current?.status?.status;
+    return !!saved.current?.taskId && s !== "SUCCEEDED" && s !== "FAILED" && s !== "EXPIRED";
+  });
   const [error, setError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [selectedRim, setSelectedRim] = useState<Rim | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Persist state changes
+  useEffect(() => {
+    if (taskId && image) {
+      saveSession({ image, taskId, status });
+    }
+  }, [image, taskId, status]);
+
   // Poll for status
   useEffect(() => {
     if (!taskId) return;
+    // If already succeeded, don't poll
+    if (status?.status === "SUCCEEDED") return;
 
     const poll = async () => {
       try {
@@ -43,8 +82,8 @@ const ThreeDPage = () => {
       }
     };
 
-    poll(); // Initial check
-    pollRef.current = setInterval(poll, 5000); // Check every 5s
+    poll();
+    pollRef.current = setInterval(poll, 5000);
 
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
@@ -114,6 +153,7 @@ const ThreeDPage = () => {
     setStatus(null);
     setGenerating(false);
     setError(null);
+    saveSession(null);
     if (pollRef.current) clearInterval(pollRef.current);
   };
 
@@ -145,19 +185,17 @@ const ThreeDPage = () => {
             className="mb-8"
           >
             <div className="flex flex-col lg:flex-row gap-4">
-              {/* 3D Viewer - main area */}
               <div className="flex-1 min-w-0">
-                <div className="glass-surface rounded-2xl overflow-hidden p-1">
+                <div className="rounded-2xl overflow-hidden border border-border shadow-lg">
                   <ThreeDViewer modelUrl={modelUrl} />
                 </div>
                 <div className="flex items-center justify-center gap-4 mt-3">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <CheckCircle className="w-4 h-4 text-primary" />
-                    <span>Drehe das Modell mit der Maus oder Touch</span>
+                    <span>Drehe das Modell mit der Maus — 360° Ansicht</span>
                   </div>
                 </div>
 
-                {/* Selected rim preview overlay */}
                 {selectedRim && (
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
@@ -178,7 +216,6 @@ const ThreeDPage = () => {
                 )}
               </div>
 
-              {/* Rim Configurator sidebar */}
               <div className="lg:w-80 shrink-0">
                 <div className="glass-surface rounded-2xl overflow-hidden lg:h-[calc(56.25vw*0.65)] lg:max-h-[520px] h-[400px]">
                   <RimConfigurator
@@ -251,9 +288,7 @@ const ThreeDPage = () => {
                 <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-6">
                   <Camera className="w-7 h-7 text-primary" />
                 </div>
-                <p className="font-display text-xl font-semibold mb-2">
-                  Autofoto hochladen
-                </p>
+                <p className="font-display text-xl font-semibold mb-2">Autofoto hochladen</p>
                 <p className="text-muted-foreground text-sm mb-4">
                   Am besten ein klares Seitenfoto vor neutralem Hintergrund
                 </p>
@@ -273,7 +308,6 @@ const ThreeDPage = () => {
                 <div className="relative">
                   <img src={image} alt="Dein Auto" className="w-full object-contain max-h-[400px]" />
 
-                  {/* Progress overlay */}
                   {generating && (
                     <div className="absolute inset-0 bg-background/70 backdrop-blur-sm flex items-center justify-center">
                       <div className="text-center">
@@ -300,7 +334,6 @@ const ThreeDPage = () => {
                   )}
                 </div>
 
-                {/* Controls */}
                 <div className="p-6 border-t border-border">
                   {error && (
                     <div className="flex items-center gap-2 text-sm text-destructive mb-4">
