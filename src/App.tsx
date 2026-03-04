@@ -7,7 +7,6 @@ import Header from "@/components/Header";
 import Index from "./pages/Index";
 import CatalogPage from "./pages/CatalogPage";
 import ResultPage from "./pages/ResultPage";
-import ThreeDPage from "./pages/ThreeDPage";
 import ReconstructionUploadPage from "./pages/ReconstructionUploadPage";
 import ReconstructionStatusPage from "./pages/ReconstructionStatusPage";
 import ReconstructionViewerPage from "./pages/ReconstructionViewerPage";
@@ -24,7 +23,7 @@ const App = () => (
         <Header />
         <Routes>
           <Route path="/" element={<Index />} />
-          <Route path="/try-it" element={<ThreeDPage />} />
+          <Route path="/try-it" element={<ReconstructionUploadPage />} />
           <Route path="/catalog" element={<CatalogPage />} />
           <Route path="/result" element={<ResultPage />} />
           <Route path="/reconstruction/new" element={<ReconstructionUploadPage />} />

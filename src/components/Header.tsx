@@ -23,7 +23,7 @@ const Header = () => {
         <nav className="hidden md:flex items-center gap-8">
           {[
             { path: "/", label: "Home" },
-            { path: "/try-it", label: "Try It" },
+            { path: "/try-it", label: "3D Rekonstruktion" },
             { path: "/catalog", label: "Catalog" },
           ].map((item) => (
             <Link
