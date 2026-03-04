@@ -153,25 +153,25 @@ def export_splat(model_dir, output_path):
 
 
 def upload_to_storage(local_path, storage_path):
-    """Upload file to Supabase Storage."""
-    if STORAGE_BASE:
-        # Determine content type
+    """Upload file to Supabase Storage via worker-callback edge function."""
+    import base64
+    if CALLBACK_URL:
         ext = str(local_path).rsplit(".", 1)[-1].lower()
         content_types = {"splat": "application/octet-stream", "ply": "application/octet-stream", "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png"}
         content_type = content_types.get(ext, "application/octet-stream")
 
         with open(local_path, "rb") as f:
-            resp = requests.post(
-                f"{STORAGE_BASE}/object/reconstructions/{storage_path}",
-                data=f.read(),
-                headers={
-                    "Authorization": f"Bearer {os.environ.get('SUPABASE_SERVICE_ROLE_KEY', '')}",
-                    "Content-Type": content_type,
-                    "x-upsert": "true",
-                },
-            )
-            resp.raise_for_status()
-            return f"{STORAGE_BASE}/object/public/reconstructions/{storage_path}"
+            file_data = base64.b64encode(f.read()).decode("utf-8")
+
+        resp = requests.post(CALLBACK_URL, json={
+            "action": "upload_file",
+            "path": storage_path,
+            "base64_data": file_data,
+            "content_type": content_type,
+        }, timeout=300)
+        resp.raise_for_status()
+        result = resp.json()
+        return result.get("public_url", str(local_path))
     return str(local_path)
 
 
