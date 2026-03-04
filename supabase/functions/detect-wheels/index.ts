@@ -28,26 +28,25 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "google/gemini-2.5-pro",
         messages: [
+          {
+            role: "system",
+            content: `You are an expert computer vision system specialized in detecting car wheels in photographs. 
+You must identify the EXACT pixel-level center and radius of each visible wheel/rim in the image.
+Return coordinates as percentages of the image dimensions (0-100).
+x = horizontal position from LEFT edge as % of image WIDTH.
+y = vertical position from TOP edge as % of image HEIGHT.  
+radius = wheel radius as % of image WIDTH.
+Be extremely precise. The center should be at the hub/axle of the wheel, and the radius should encompass the full rim (including tire).
+For a typical side-view car photo, wheels are usually in the lower 60-80% of the image height.`,
+          },
           {
             role: "user",
             content: [
               {
                 type: "text",
-                text: `Analyze this car photo and detect the wheels/rims. Return ONLY a JSON object (no markdown, no code fences) with:
-{
-  "wheels": [
-    { "x": <center_x_percentage 0-100>, "y": <center_y_percentage 0-100>, "radius": <radius_percentage 0-100> }
-  ],
-  "car_model": "<detected car make and model if identifiable>",
-  "confidence": <0-1 confidence score>
-}
-
-The x, y coordinates should be percentages of the image dimensions (0-100).
-The radius should be the wheel radius as a percentage of image width.
-Detect ALL visible wheels in the side view.
-Be very precise with the wheel center positions and sizes.`,
+                text: "Detect all visible wheels in this car photo. Be very precise with center positions and radius.",
               },
               {
                 type: "image_url",
@@ -61,7 +60,7 @@ Be very precise with the wheel center positions and sizes.`,
             type: "function",
             function: {
               name: "report_wheels",
-              description: "Report detected wheel positions in the car photo",
+              description: "Report the precisely detected wheel positions in the car photo",
               parameters: {
                 type: "object",
                 properties: {
@@ -70,15 +69,15 @@ Be very precise with the wheel center positions and sizes.`,
                     items: {
                       type: "object",
                       properties: {
-                        x: { type: "number", description: "Center X as percentage of image width (0-100)" },
-                        y: { type: "number", description: "Center Y as percentage of image height (0-100)" },
-                        radius: { type: "number", description: "Radius as percentage of image width (0-100)" },
+                        x: { type: "number", description: "Wheel center X as % of image width (0-100), measured from left edge" },
+                        y: { type: "number", description: "Wheel center Y as % of image height (0-100), measured from top edge" },
+                        radius: { type: "number", description: "Wheel radius as % of image width (0-100), should include the full rim and tire" },
                       },
                       required: ["x", "y", "radius"],
                       additionalProperties: false,
                     },
                   },
-                  car_model: { type: "string", description: "Detected car make and model" },
+                  car_model: { type: "string", description: "Detected car make and model if identifiable" },
                   confidence: { type: "number", description: "Detection confidence 0-1" },
                 },
                 required: ["wheels", "car_model", "confidence"],
@@ -94,17 +93,14 @@ Be very precise with the wheel center positions and sizes.`,
     if (!response.ok) {
       const errText = await response.text();
       console.error("AI gateway error:", response.status, errText);
-
       if (response.status === 429) {
         return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again shortly." }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       if (response.status === 402) {
         return new Response(JSON.stringify({ error: "AI credits exhausted. Please add funds." }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       throw new Error("AI gateway error: " + response.status);
@@ -113,7 +109,6 @@ Be very precise with the wheel center positions and sizes.`,
     const data = await response.json();
     console.log("AI response:", JSON.stringify(data));
 
-    // Extract from tool call
     const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
     if (toolCall?.function?.arguments) {
       const result = JSON.parse(toolCall.function.arguments);
@@ -122,7 +117,6 @@ Be very precise with the wheel center positions and sizes.`,
       });
     }
 
-    // Fallback: try to parse from content
     const content = data.choices?.[0]?.message?.content || "";
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (jsonMatch) {

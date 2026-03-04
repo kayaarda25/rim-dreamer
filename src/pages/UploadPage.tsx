@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Upload, CheckCircle, AlertCircle, Move, Car } from "lucide-react";
@@ -11,9 +11,41 @@ interface WheelMarker {
   radius: number;
 }
 
+/**
+ * Calculates the actual rendered image bounds inside an object-contain container.
+ */
+function getImageBounds(
+  containerW: number,
+  containerH: number,
+  naturalW: number,
+  naturalH: number
+) {
+  const containerAspect = containerW / containerH;
+  const imageAspect = naturalW / naturalH;
+
+  let renderW: number, renderH: number, offsetX: number, offsetY: number;
+
+  if (imageAspect > containerAspect) {
+    // Image is wider: full width, letterbox top/bottom
+    renderW = containerW;
+    renderH = containerW / imageAspect;
+    offsetX = 0;
+    offsetY = (containerH - renderH) / 2;
+  } else {
+    // Image is taller: full height, letterbox left/right
+    renderH = containerH;
+    renderW = containerH * imageAspect;
+    offsetX = (containerW - renderW) / 2;
+    offsetY = 0;
+  }
+
+  return { renderW, renderH, offsetX, offsetY };
+}
+
 const UploadPage = () => {
   const navigate = useNavigate();
   const [image, setImage] = useState<string | null>(null);
+  const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [detecting, setDetecting] = useState(false);
   const [detected, setDetected] = useState(false);
@@ -22,11 +54,28 @@ const UploadPage = () => {
   const [confidence, setConfidence] = useState(0);
   const [adjustMode, setAdjustMode] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const imgContainerRef = useRef<HTMLDivElement>(null);
+  const [containerSize, setContainerSize] = useState<{ w: number; h: number } | null>(null);
+
+  // Track container size
+  useEffect(() => {
+    if (!imgContainerRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) {
+        setContainerSize({
+          w: entry.contentRect.width,
+          h: entry.contentRect.height,
+        });
+      }
+    });
+    observer.observe(imgContainerRef.current);
+    return () => observer.disconnect();
+  }, [image]);
 
   const handleFile = useCallback(async (file: File) => {
     if (!file.type.startsWith("image/")) return;
 
-    // Resize image to reduce payload size for the API
     const dataUrl = await new Promise<string>((resolve) => {
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -51,6 +100,12 @@ const UploadPage = () => {
       reader.readAsDataURL(file);
     });
 
+    // Get natural dimensions
+    const imgEl = new Image();
+    imgEl.src = dataUrl;
+    await new Promise((r) => (imgEl.onload = r));
+    setNaturalSize({ w: imgEl.naturalWidth, h: imgEl.naturalHeight });
+
     setImage(dataUrl);
     setDetected(false);
     setWheels([]);
@@ -64,15 +119,14 @@ const UploadPage = () => {
       setCarModel(result.car_model);
       setConfidence(result.confidence);
       setDetected(true);
-      toast.success(`Detected ${result.wheels.length} wheel(s)${result.car_model ? ` on ${result.car_model}` : ""}`);
+      toast.success(`${result.wheels.length} Rad/Räder erkannt${result.car_model ? ` — ${result.car_model}` : ""}`);
     } catch (err) {
       console.error("Detection error:", err);
-      setError(err instanceof Error ? err.message : "Detection failed");
-      toast.error("Wheel detection failed. You can manually adjust wheel positions.");
-      // Provide default fallback positions
+      setError(err instanceof Error ? err.message : "Erkennung fehlgeschlagen");
+      toast.error("Raderkennung fehlgeschlagen. Positionen können manuell angepasst werden.");
       setWheels([
-        { x: 22, y: 68, radius: 8 },
-        { x: 78, y: 68, radius: 8 },
+        { x: 22, y: 70, radius: 10 },
+        { x: 78, y: 70, radius: 10 },
       ]);
       setDetected(true);
     } finally {
@@ -93,6 +147,40 @@ const UploadPage = () => {
       if (carModel) sessionStorage.setItem("wheelVision_carModel", carModel);
       navigate("/catalog");
     }
+  };
+
+  // Convert wheel % coordinates to pixel positions within the container,
+  // accounting for object-contain letterboxing
+  const getMarkerStyle = (w: WheelMarker) => {
+    if (!containerSize || !naturalSize) {
+      // Fallback: simple percentage
+      return {
+        left: `${w.x - w.radius}%`,
+        top: `${w.y - w.radius}%`,
+        width: `${w.radius * 2}%`,
+        height: `${w.radius * 2}%`,
+      };
+    }
+
+    const { renderW, renderH, offsetX, offsetY } = getImageBounds(
+      containerSize.w,
+      containerSize.h,
+      naturalSize.w,
+      naturalSize.h
+    );
+
+    // w.x/w.y are % of the image dimensions
+    const centerXpx = offsetX + (w.x / 100) * renderW;
+    const centerYpx = offsetY + (w.y / 100) * renderH;
+    // radius is % of image width
+    const radiusPx = (w.radius / 100) * renderW;
+
+    return {
+      left: `${centerXpx - radiusPx}px`,
+      top: `${centerYpx - radiusPx}px`,
+      width: `${radiusPx * 2}px`,
+      height: `${radiusPx * 2}px`,
+    };
   };
 
   return (
@@ -145,41 +233,42 @@ const UploadPage = () => {
               animate={{ opacity: 1, scale: 1 }}
               className="glass-surface rounded-2xl overflow-hidden"
             >
-              <div className="relative">
-                <img src={image} alt="Your car" className="w-full object-contain max-h-[500px]" />
+              <div ref={imgContainerRef} className="relative">
+                <img
+                  src={image}
+                  alt="Your car"
+                  className="w-full object-contain max-h-[500px]"
+                  onLoad={(e) => {
+                    const el = e.currentTarget;
+                    setNaturalSize({ w: el.naturalWidth, h: el.naturalHeight });
+                  }}
+                />
 
-                {/* Wheel markers */}
+                {/* Wheel markers - positioned with pixel precision */}
                 {wheels.map((w, i) => (
                   <div
                     key={i}
-                    className={`absolute border-2 rounded-full transition-all duration-500 ${
-                      adjustMode ? "border-primary cursor-move" : "border-primary/60"
+                    className={`absolute border-2 rounded-full transition-all duration-500 pointer-events-none ${
+                      adjustMode ? "border-primary" : "border-primary/70"
                     }`}
-                    style={{
-                      left: `${w.x - w.radius}%`,
-                      top: `${w.y - w.radius}%`,
-                      width: `${w.radius * 2}%`,
-                      height: `${w.radius * 2}%`,
-                    }}
+                    style={getMarkerStyle(w)}
                   >
                     <div className="absolute inset-0 bg-primary/10 rounded-full" />
                     <div className="absolute top-1/2 left-1/2 w-2 h-2 -translate-x-1/2 -translate-y-1/2 bg-primary rounded-full" />
                   </div>
                 ))}
 
-                {/* Detecting overlay */}
                 {detecting && (
                   <div className="absolute inset-0 bg-background/60 backdrop-blur-sm flex items-center justify-center">
                     <div className="text-center">
                       <div className="w-12 h-12 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                      <p className="font-display font-semibold">AI is detecting wheels...</p>
-                      <p className="text-muted-foreground text-sm">Analyzing your photo with computer vision</p>
+                      <p className="font-display font-semibold">AI erkennt Räder...</p>
+                      <p className="text-muted-foreground text-sm">Foto wird mit Computer Vision analysiert</p>
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* Controls */}
               <div className="p-6 border-t border-border">
                 <div className="flex items-center justify-between flex-wrap gap-4">
                   <div className="flex items-center gap-3">
@@ -191,9 +280,9 @@ const UploadPage = () => {
                       >
                         <div className="flex items-center gap-2 text-sm">
                           <CheckCircle className="w-4 h-4 text-primary" />
-                          <span className="text-primary font-medium">{wheels.length} wheel(s) detected</span>
+                          <span className="text-primary font-medium">{wheels.length} Rad/Räder erkannt</span>
                           {confidence > 0 && (
-                            <span className="text-muted-foreground text-xs">({Math.round(confidence * 100)}% confidence)</span>
+                            <span className="text-muted-foreground text-xs">({Math.round(confidence * 100)}%)</span>
                           )}
                         </div>
                         {carModel && (
@@ -203,7 +292,7 @@ const UploadPage = () => {
                           </div>
                         )}
                         {error && (
-                          <p className="text-destructive text-xs">{error} — using default positions</p>
+                          <p className="text-destructive text-xs">{error}</p>
                         )}
                       </motion.div>
                     )}
@@ -240,7 +329,6 @@ const UploadPage = () => {
           )}
         </AnimatePresence>
 
-        {/* Tips */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -250,12 +338,12 @@ const UploadPage = () => {
           <div className="flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-primary mt-0.5 shrink-0" />
             <div>
-              <p className="font-display font-semibold text-sm mb-1">Tips for best results</p>
+              <p className="font-display font-semibold text-sm mb-1">Tipps für beste Ergebnisse</p>
               <ul className="text-muted-foreground text-sm space-y-1">
-                <li>• Take the photo from the side at wheel height</li>
-                <li>• Ensure the full car is visible in the frame</li>
-                <li>• Good lighting produces better results</li>
-                <li>• AI will automatically detect your car model and wheel positions</li>
+                <li>• Foto von der Seite auf Radhöhe aufnehmen</li>
+                <li>• Das ganze Auto sollte im Bild sichtbar sein</li>
+                <li>• Gute Beleuchtung führt zu besseren Ergebnissen</li>
+                <li>• AI erkennt automatisch Automodell und Radpositionen</li>
               </ul>
             </div>
           </div>
