@@ -1,5 +1,5 @@
 import { Suspense, useRef, useState, useEffect } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, useGLTF, Environment, ContactShadows } from "@react-three/drei";
 import * as THREE from "three";
 import { Loader2 } from "lucide-react";
@@ -12,13 +12,35 @@ function CarModel({ url }: CarModelProps) {
   const { scene } = useGLTF(url);
   const ref = useRef<THREE.Group>(null);
 
+  // Fix dark materials - brighten everything
+  useEffect(() => {
+    scene.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        const mesh = child as THREE.Mesh;
+        const mat = mesh.material as THREE.MeshStandardMaterial;
+        if (mat && mat.isMeshStandardMaterial) {
+          // Brighten dark materials
+          const hsl = { h: 0, s: 0, l: 0 };
+          mat.color.getHSL(hsl);
+          if (hsl.l < 0.15) {
+            mat.color.setHSL(hsl.h, hsl.s, Math.max(hsl.l, 0.25));
+          }
+          // Increase metalness/roughness for better reflections
+          mat.metalness = Math.max(mat.metalness, 0.3);
+          mat.roughness = Math.min(mat.roughness, 0.7);
+          mat.envMapIntensity = 1.5;
+          mat.needsUpdate = true;
+        }
+      }
+    });
+  }, [scene]);
+
   const box = new THREE.Box3().setFromObject(scene);
   const center = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3());
   const maxDim = Math.max(size.x, size.y, size.z);
-  const scale = 2 / maxDim;
+  const scale = 2.5 / maxDim;
 
-  // Place car on ground: shift so bottom of bounding box is at y=0
   const bottomY = box.min.y;
   scene.position.set(
     -center.x * scale,
@@ -48,18 +70,38 @@ function LoadingFallback() {
   );
 }
 
-// Ground plane with subtle grid/circle like Mercedes configurator
 function GroundPlane() {
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
-      <circleGeometry args={[3, 64]} />
-      <meshStandardMaterial
-        color="#f5f5f5"
-        roughness={0.8}
-        metalness={0.1}
-      />
-    </mesh>
+    <>
+      {/* Main ground */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
+        <circleGeometry args={[4, 64]} />
+        <meshStandardMaterial color="#e0e0e0" roughness={0.9} metalness={0.05} />
+      </mesh>
+      {/* Outer ring for depth */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]}>
+        <ringGeometry args={[4, 6, 64]} />
+        <meshStandardMaterial color="#f0f0f0" roughness={1} metalness={0} transparent opacity={0.5} />
+      </mesh>
+    </>
   );
+}
+
+// Auto-rotate component
+function AutoRotate() {
+  const { camera } = useThree();
+  const angle = useRef(0);
+  
+  useFrame((_, delta) => {
+    angle.current += delta * 0.15;
+    const radius = camera.position.length();
+    const height = camera.position.y;
+    camera.position.x = Math.sin(angle.current) * radius * Math.cos(Math.atan2(height, radius));
+    camera.position.z = Math.cos(angle.current) * radius * Math.cos(Math.atan2(height, radius));
+    camera.lookAt(0, 0.5, 0);
+  });
+  
+  return null;
 }
 
 interface ThreeDViewerProps {
@@ -130,38 +172,50 @@ const ThreeDViewer = ({ modelUrl }: ThreeDViewerProps) => {
   }
 
   return (
-    <div className="w-full aspect-video rounded-2xl overflow-hidden" style={{ background: "linear-gradient(180deg, #e8e8e8 0%, #f8f8f8 40%, #ffffff 100%)" }}>
+    <div
+      className="w-full aspect-video rounded-2xl overflow-hidden"
+      style={{ background: "radial-gradient(ellipse at center, #ffffff 0%, #e8e8e8 60%, #d0d0d0 100%)" }}
+    >
       <Canvas
-        camera={{ position: [4, 1.5, 4], fov: 40 }}
+        camera={{ position: [4, 2, 4], fov: 35 }}
         shadows
-        gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping }}
+        gl={{
+          antialias: true,
+          toneMapping: THREE.ACESFilmicToneMapping,
+          toneMappingExposure: 1.8,
+        }}
       >
-        <ambientLight intensity={0.6} />
-        <directionalLight position={[5, 8, 5]} intensity={1.2} castShadow />
-        <directionalLight position={[-3, 4, -3]} intensity={0.3} />
+        {/* Strong ambient for overall brightness */}
+        <ambientLight intensity={1.0} />
+        {/* Key light */}
+        <directionalLight position={[5, 8, 3]} intensity={2.0} castShadow />
+        {/* Fill lights */}
+        <directionalLight position={[-4, 5, -2]} intensity={0.8} />
+        <directionalLight position={[0, 3, -5]} intensity={0.5} />
+        {/* Rim light from behind */}
+        <directionalLight position={[-2, 4, 5]} intensity={0.6} />
+        {/* Bottom fill to reduce dark underside */}
+        <pointLight position={[0, -1, 0]} intensity={0.3} />
 
         <Suspense fallback={<LoadingFallback />}>
           <CarModel url={blobUrl} />
           <GroundPlane />
           <ContactShadows
             position={[0, 0.01, 0]}
-            opacity={0.3}
-            scale={6}
-            blur={2}
+            opacity={0.25}
+            scale={8}
+            blur={2.5}
           />
-          <Environment preset="studio" />
+          <Environment preset="studio" background={false} />
         </Suspense>
 
-        {/* Horizontal-only rotation, fixed height, like Mercedes configurator */}
         <OrbitControls
           enablePan={false}
           enableZoom={true}
           minDistance={3}
           maxDistance={8}
-          // Lock vertical angle to a slight top-down view
-          minPolarAngle={Math.PI / 3}
-          maxPolarAngle={Math.PI / 3}
-          // Allow full 360° horizontal rotation
+          minPolarAngle={Math.PI / 3.5}
+          maxPolarAngle={Math.PI / 2.8}
           minAzimuthAngle={-Infinity}
           maxAzimuthAngle={Infinity}
           target={[0, 0.5, 0]}
