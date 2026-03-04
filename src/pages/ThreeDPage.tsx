@@ -5,6 +5,8 @@ import { Upload, Camera, Box, Loader2, CheckCircle, AlertTriangle, RotateCcw } f
 import { toast } from "sonner";
 import { generate3DModel, check3DStatus, type ThreeDStatus } from "@/lib/api";
 import ThreeDViewer from "@/components/ThreeDViewer";
+import RimConfigurator from "@/components/RimConfigurator";
+import { type Rim } from "@/data/rims";
 
 const ThreeDPage = () => {
   const navigate = useNavigate();
@@ -14,6 +16,7 @@ const ThreeDPage = () => {
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  const [selectedRim, setSelectedRim] = useState<Rim | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Poll for status
@@ -121,7 +124,7 @@ const ThreeDPage = () => {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="max-w-4xl mx-auto"
+        className={modelUrl ? "max-w-6xl mx-auto" : "max-w-4xl mx-auto"}
       >
         <div className="text-center mb-12">
           <p className="text-primary text-sm tracking-[0.2em] uppercase mb-3">
@@ -134,20 +137,55 @@ const ThreeDPage = () => {
           </p>
         </div>
 
-        {/* 3D Viewer when model is ready */}
+        {/* 3D Viewer + Rim Configurator when model is ready */}
         {modelUrl && (
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             className="mb-8"
           >
-            <div className="glass-surface rounded-2xl overflow-hidden p-1">
-              <ThreeDViewer modelUrl={modelUrl} />
-            </div>
-            <div className="flex items-center justify-center gap-4 mt-4">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <CheckCircle className="w-4 h-4 text-primary" />
-                <span>Drehe das Modell mit der Maus oder Touch</span>
+            <div className="flex flex-col lg:flex-row gap-4">
+              {/* 3D Viewer - main area */}
+              <div className="flex-1 min-w-0">
+                <div className="glass-surface rounded-2xl overflow-hidden p-1">
+                  <ThreeDViewer modelUrl={modelUrl} />
+                </div>
+                <div className="flex items-center justify-center gap-4 mt-3">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <CheckCircle className="w-4 h-4 text-primary" />
+                    <span>Drehe das Modell mit der Maus oder Touch</span>
+                  </div>
+                </div>
+
+                {/* Selected rim preview overlay */}
+                {selectedRim && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="glass-surface rounded-xl p-4 mt-4 flex items-center gap-4"
+                  >
+                    <div className="w-20 h-20 rounded-lg overflow-hidden border border-primary/30 shrink-0">
+                      <img src={selectedRim.image} alt={selectedRim.name} className="w-full h-full object-cover" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wider">Ausgewählte Felge</p>
+                      <p className="font-display font-bold text-lg">{selectedRim.name}</p>
+                      <p className="text-muted-foreground text-sm">
+                        {selectedRim.brand} · {selectedRim.size}" · €{selectedRim.price.toLocaleString("de-DE")}
+                      </p>
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+
+              {/* Rim Configurator sidebar */}
+              <div className="lg:w-80 shrink-0">
+                <div className="glass-surface rounded-2xl overflow-hidden lg:h-[calc(56.25vw*0.65)] lg:max-h-[520px] h-[400px]">
+                  <RimConfigurator
+                    selectedRim={selectedRim}
+                    onSelectRim={setSelectedRim}
+                  />
+                </div>
               </div>
             </div>
 
