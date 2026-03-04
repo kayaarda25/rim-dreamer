@@ -63,24 +63,36 @@ def preprocess_images(raw_dir, output_dir, max_size=1600):
     return output_dir
 
 
+def _detect_gpu():
+    """Check if CUDA GPU is available for COLMAP."""
+    try:
+        result = subprocess.run(["nvidia-smi"], capture_output=True, timeout=5)
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
 def run_colmap(images_dir, output_dir):
     """Run COLMAP sparse reconstruction."""
     db_path = output_dir / "database.db"
     sparse_dir = output_dir / "sparse"
     sparse_dir.mkdir(parents=True, exist_ok=True)
 
+    use_gpu = "1" if _detect_gpu() else "0"
+    print(f"COLMAP using GPU: {use_gpu}")
+
     subprocess.run([
         "colmap", "feature_extractor",
         "--database_path", str(db_path),
         "--image_path", str(images_dir),
         "--ImageReader.single_camera", "1",
-        "--SiftExtraction.use_gpu", "1",
+        "--SiftExtraction.use_gpu", use_gpu,
     ], check=True)
 
     subprocess.run([
         "colmap", "exhaustive_matcher",
         "--database_path", str(db_path),
-        "--SiftMatching.use_gpu", "1",
+        "--SiftMatching.use_gpu", use_gpu,
     ], check=True)
 
     subprocess.run([
