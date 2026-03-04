@@ -34,19 +34,38 @@ const RimConfigurator = ({ selectedRim, onSelectRim }: RimConfiguratorProps) => 
 
     const reader = new FileReader();
     reader.onload = (ev) => {
-      const dataUrl = ev.target?.result as string;
-      const newRim: Rim = {
-        id: `custom-${Date.now()}`,
-        name: `Eigene Felge ${customRims.length + 1}`,
-        brand: "Eigene",
-        size: 20,
-        color: "silver",
-        price: 0,
-        image: dataUrl,
+      const rawDataUrl = ev.target?.result as string;
+      
+      // Normalize: resize and convert to JPEG (same as catalog rims)
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const maxDim = 1200;
+        let w = img.width, h = img.height;
+        if (w > maxDim || h > maxDim) {
+          const scale = maxDim / Math.max(w, h);
+          w = Math.round(w * scale);
+          h = Math.round(h * scale);
+        }
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
+        const normalizedDataUrl = canvas.toDataURL("image/jpeg", 0.9);
+        
+        const newRim: Rim = {
+          id: `custom-${Date.now()}`,
+          name: `Eigene Felge ${customRims.length + 1}`,
+          brand: "Eigene",
+          size: 20,
+          color: "silver",
+          price: 0,
+          image: normalizedDataUrl,
+        };
+        setCustomRims((prev) => [...prev, newRim]);
+        onSelectRim(newRim);
+        toast.success("Eigene Felge hinzugefügt!");
       };
-      setCustomRims((prev) => [...prev, newRim]);
-      onSelectRim(newRim);
-      toast.success("Eigene Felge hinzugefügt!");
+      img.src = rawDataUrl;
     };
     reader.readAsDataURL(file);
     e.target.value = "";
