@@ -25,6 +25,7 @@ const Header = () => {
             { path: "/", label: "Home" },
             { path: "/upload", label: "Try It" },
             { path: "/catalog", label: "Catalog" },
+            { path: "/3d", label: "3D View" },
           ].map((item) => (
             <Link
               key={item.path}
