@@ -112,10 +112,25 @@ const ThreeDPage = () => {
     setRimRendering(true);
     setRenderedImage(null);
     try {
+      // Convert local rim image to base64 data URI for the AI API
+      const rimBase64 = await new Promise<string>((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          canvas.width = img.width;
+          canvas.height = img.height;
+          canvas.getContext("2d")!.drawImage(img, 0, 0);
+          resolve(canvas.toDataURL("image/jpeg", 0.9));
+        };
+        img.onerror = reject;
+        img.src = rim.image;
+      });
+
       const detection = await detectWheels(image);
       const result = await renderRims({
         carImage: image,
-        rimImage: rim.image,
+        rimImage: rimBase64,
         rimName: rim.name,
         wheels: detection.wheels,
       });
