@@ -24,29 +24,29 @@ function CarModel({ url, rimColor }: CarModelProps) {
 
   // Fix materials and identify wheels
   useEffect(() => {
-    const wheels: THREE.Mesh[] = [];
+    // First pass: compute car bounding box for reference
+    const carBox = new THREE.Box3().setFromObject(scene);
+    const carCenter = carBox.getCenter(new THREE.Vector3());
+    const carSize = carBox.getSize(new THREE.Vector3());
+    const carBottomY = carBox.min.y;
+    const carHeight = carSize.y;
+    
+    const wheels: { mesh: THREE.Mesh; score: number }[] = [];
     
     scene.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
         const mesh = child as THREE.Mesh;
         const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
         
-        // Detect wheel meshes by position (low Y, far from center X/Z)
-        const worldPos = new THREE.Vector3();
-        mesh.getWorldPosition(worldPos);
-        
+        // Improve all materials
         materials.forEach((mat) => {
           if (mat && (mat as THREE.MeshStandardMaterial).isMeshStandardMaterial) {
             const stdMat = mat as THREE.MeshStandardMaterial;
-            
-            // Better car paint - high metalness, low roughness
             const hsl = { h: 0, s: 0, l: 0 };
             stdMat.color.getHSL(hsl);
-            
             if (hsl.l < 0.1) {
               stdMat.color.setHSL(hsl.h, hsl.s, 0.15);
             }
-            
             stdMat.metalness = Math.max(stdMat.metalness, 0.5);
             stdMat.roughness = Math.min(stdMat.roughness, 0.4);
             stdMat.envMapIntensity = 2.5;
@@ -54,33 +54,38 @@ function CarModel({ url, rimColor }: CarModelProps) {
           }
         });
 
-        // Heuristic: wheel meshes are typically small, circular, at low Y
-        // and positioned at the sides of the car
+        // Strict wheel detection: must be LOW on the car and at the SIDES
         const box = new THREE.Box3().setFromObject(mesh);
-        const size = box.getSize(new THREE.Vector3());
         const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
         
-        // Wheels tend to be roughly equal in width/height (circular)
-        // and positioned low and at the edges
-        const isRoundish = Math.abs(size.x - size.y) / Math.max(size.x, size.y, 0.01) < 0.8;
-        const isLow = center.y < (scene as any).__carCenterY || false;
+        // Wheel must be in the bottom 30% of the car
+        const relativeY = (center.y - carBottomY) / carHeight;
+        const isLow = relativeY < 0.3;
         
-        if (isRoundish && size.x > 0.01 && size.x < size.z * 3) {
-          wheels.push(mesh);
+        // Wheel must be offset from center (at the sides of the car)
+        const distFromCenterX = Math.abs(center.x - carCenter.x);
+        const isAtSide = distFromCenterX > carSize.x * 0.15;
+        
+        // Wheel should not be at the very front or very back (headlights/taillights area)
+        const relativeZ = (center.z - carBox.min.z) / carSize.z;
+        const isNotExtremeFrontBack = relativeZ > 0.1 && relativeZ < 0.9;
+        
+        // Must have some minimum size
+        const hasMinSize = size.x > carSize.x * 0.02;
+        
+        if (isLow && isAtSide && isNotExtremeFrontBack && hasMinSize) {
+          // Score: prefer larger, lower, more side-positioned meshes
+          const score = (1 - relativeY) * distFromCenterX * Math.max(size.x, size.y, size.z);
+          wheels.push({ mesh, score });
         }
       }
     });
     
-    // Sort by size - wheels should be among the larger round parts
-    wheels.sort((a, b) => {
-      const sA = new THREE.Box3().setFromObject(a).getSize(new THREE.Vector3());
-      const sB = new THREE.Box3().setFromObject(b).getSize(new THREE.Vector3());
-      return (sB.x * sB.y) - (sA.x * sA.y);
-    });
-    
-    // Keep top candidates as wheel meshes (usually 2-4)
-    wheelMeshes.current = wheels.slice(0, 8);
-    console.log(`Detected ${wheelMeshes.current.length} potential wheel meshes`);
+    // Sort by score and keep top 4
+    wheels.sort((a, b) => b.score - a.score);
+    wheelMeshes.current = wheels.slice(0, 4).map(w => w.mesh);
+    console.log(`Detected ${wheelMeshes.current.length} wheel meshes (strict mode)`);
   }, [scene]);
 
   // Apply rim color to detected wheel meshes
