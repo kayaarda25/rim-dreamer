@@ -139,13 +139,11 @@ def train_gaussian_splatting(images_dir, colmap_dir, output_dir):
 
 def export_splat(model_dir, output_path):
     """Export trained model to .splat format."""
-    env = os.environ.copy()
-    env["TORCH_FORCE_WEIGHTS_ONLY_LOAD"] = "0"
     subprocess.run([
-        "ns-export", "gaussian-splat",
+        sys.executable, "/app/export_splat.py", "gaussian-splat",
         "--load-config", str(next(model_dir.rglob("config.yml"))),
         "--output-dir", str(output_path.parent),
-    ], check=True, env=env)
+    ], check=True)
 
     splat_files = list(output_path.parent.glob("*.splat")) + list(output_path.parent.glob("*.ply"))
     if splat_files:

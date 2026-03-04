@@ -23,6 +23,7 @@ RUN pip3 install requests pillow
 
 WORKDIR /app
 COPY worker.py /app/
+COPY export_splat.py /app/
 COPY entrypoint.sh /app/
 
 ENTRYPOINT ["/app/entrypoint.sh"]
