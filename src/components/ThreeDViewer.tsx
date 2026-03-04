@@ -1,7 +1,8 @@
-import { Suspense, useRef } from "react";
+import { Suspense, useRef, useState, useEffect } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, useGLTF, Environment, ContactShadows, PresentationControls } from "@react-three/drei";
 import * as THREE from "three";
+import { Loader2 } from "lucide-react";
 
 interface CarModelProps {
   url: string;
@@ -11,7 +12,6 @@ function CarModel({ url }: CarModelProps) {
   const { scene } = useGLTF(url);
   const ref = useRef<THREE.Group>(null);
 
-  // Center and scale the model
   const box = new THREE.Box3().setFromObject(scene);
   const center = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3());
@@ -47,6 +47,68 @@ interface ThreeDViewerProps {
 }
 
 const ThreeDViewer = ({ modelUrl }: ThreeDViewerProps) => {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchModel = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+        
+        const resp = await fetch(`${supabaseUrl}/functions/v1/proxy-model`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${supabaseKey}`,
+          },
+          body: JSON.stringify({ url: modelUrl }),
+        });
+
+        if (!resp.ok) throw new Error(`Proxy failed: ${resp.status}`);
+
+        const blob = await resp.blob();
+        if (cancelled) return;
+        const url = URL.createObjectURL(blob);
+        setBlobUrl(url);
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load model");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    fetchModel();
+    return () => {
+      cancelled = true;
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    };
+  }, [modelUrl]);
+
+  if (loading) {
+    return (
+      <div className="w-full aspect-video rounded-2xl overflow-hidden bg-muted/20 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 text-primary animate-spin mx-auto mb-2" />
+          <p className="text-sm text-muted-foreground">3D-Modell wird geladen...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !blobUrl) {
+    return (
+      <div className="w-full aspect-video rounded-2xl overflow-hidden bg-muted/20 flex items-center justify-center">
+        <p className="text-sm text-destructive">{error || "Modell konnte nicht geladen werden"}</p>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full aspect-video rounded-2xl overflow-hidden bg-muted/20">
       <Canvas
@@ -64,7 +126,7 @@ const ThreeDViewer = ({ modelUrl }: ThreeDViewerProps) => {
             polar={[-Math.PI / 4, Math.PI / 4]}
             azimuth={[-Infinity, Infinity]}
           >
-            <CarModel url={modelUrl} />
+            <CarModel url={blobUrl} />
           </PresentationControls>
           <ContactShadows
             position={[0, -1.2, 0]}
