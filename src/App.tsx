@@ -5,7 +5,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Header from "@/components/Header";
 import Index from "./pages/Index";
-import UploadPage from "./pages/UploadPage";
 import CatalogPage from "./pages/CatalogPage";
 import ResultPage from "./pages/ResultPage";
 import ThreeDPage from "./pages/ThreeDPage";
@@ -22,10 +21,9 @@ const App = () => (
         <Header />
         <Routes>
           <Route path="/" element={<Index />} />
-          <Route path="/upload" element={<UploadPage />} />
+          <Route path="/try-it" element={<ThreeDPage />} />
           <Route path="/catalog" element={<CatalogPage />} />
           <Route path="/result" element={<ResultPage />} />
-          <Route path="/3d" element={<ThreeDPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
