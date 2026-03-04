@@ -43,7 +43,7 @@ const Index = () => {
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link
-                to="/upload"
+                to="/try-it"
                 className="bg-primary text-primary-foreground px-8 py-4 rounded-xl text-base font-semibold hover:opacity-90 transition-all gold-glow"
               >
                 Upload Car Photo
@@ -106,7 +106,7 @@ const Index = () => {
             Join thousands of car enthusiasts who preview their perfect rims before making a purchase.
           </p>
           <Link
-            to="/upload"
+            to="/try-it"
             className="inline-block bg-primary text-primary-foreground px-8 py-4 rounded-xl text-base font-semibold hover:opacity-90 transition-all gold-glow"
           >
             Get Started Free

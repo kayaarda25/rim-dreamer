@@ -23,9 +23,8 @@ const Header = () => {
         <nav className="hidden md:flex items-center gap-8">
           {[
             { path: "/", label: "Home" },
-            { path: "/upload", label: "Try It" },
+            { path: "/try-it", label: "Try It" },
             { path: "/catalog", label: "Catalog" },
-            { path: "/3d", label: "3D View" },
           ].map((item) => (
             <Link
               key={item.path}
@@ -42,7 +41,7 @@ const Header = () => {
         </nav>
 
         <Link
-          to="/upload"
+          to="/try-it"
           className="bg-primary text-primary-foreground px-5 py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity"
         >
           Get Started

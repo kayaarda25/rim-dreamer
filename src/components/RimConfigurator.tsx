@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, ChevronRight, ShoppingCart } from "lucide-react";
+import { Check, ChevronRight, ShoppingCart, Upload, X } from "lucide-react";
 import { rims, type Rim } from "@/data/rims";
 import { toast } from "sonner";
 
@@ -11,6 +11,8 @@ interface RimConfiguratorProps {
 
 const RimConfigurator = ({ selectedRim, onSelectRim }: RimConfiguratorProps) => {
   const [filterColor, setFilterColor] = useState<string | null>(null);
+  const [customRims, setCustomRims] = useState<Rim[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const colorMap: Record<string, string> = {
     black: "bg-zinc-900",
@@ -26,9 +28,40 @@ const RimConfigurator = ({ selectedRim, onSelectRim }: RimConfiguratorProps) => 
     bronze: "Bronze",
   };
 
+  const handleCustomRimUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !file.type.startsWith("image/")) return;
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string;
+      const newRim: Rim = {
+        id: `custom-${Date.now()}`,
+        name: `Eigene Felge ${customRims.length + 1}`,
+        brand: "Eigene",
+        size: 20,
+        color: "silver",
+        price: 0,
+        image: dataUrl,
+      };
+      setCustomRims((prev) => [...prev, newRim]);
+      onSelectRim(newRim);
+      toast.success("Eigene Felge hinzugefügt!");
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  }, [customRims.length, onSelectRim]);
+
+  const removeCustomRim = (id: string) => {
+    setCustomRims((prev) => prev.filter((r) => r.id !== id));
+    if (selectedRim?.id === id) onSelectRim(null as any);
+  };
+
+  const allRims = [...customRims, ...rims];
+
   const filteredRims = filterColor
-    ? rims.filter((r) => r.color === filterColor)
-    : rims;
+    ? allRims.filter((r) => r.color === filterColor)
+    : allRims;
 
   return (
     <div className="flex flex-col h-full">
@@ -71,6 +104,24 @@ const RimConfigurator = ({ selectedRim, onSelectRim }: RimConfiguratorProps) => 
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Custom rim upload */}
+      <div className="px-4 py-3 border-b border-border">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleCustomRimUpload}
+        />
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border-2 border-dashed border-border text-sm text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+        >
+          <Upload className="w-4 h-4" />
+          Eigene Felge hochladen
+        </button>
       </div>
 
       {/* Rim list */}
@@ -118,14 +169,25 @@ const RimConfigurator = ({ selectedRim, onSelectRim }: RimConfiguratorProps) => 
                   <p className="text-muted-foreground text-xs">
                     {rim.brand} · {rim.size}" · {colorLabels[rim.color] || rim.color}
                   </p>
-                  <p className="text-primary font-display font-bold text-xs mt-0.5">
-                    €{rim.price.toLocaleString("de-DE")}
-                  </p>
+                  {rim.price > 0 && (
+                    <p className="text-primary font-display font-bold text-xs mt-0.5">
+                      €{rim.price.toLocaleString("de-DE")}
+                    </p>
+                  )}
                 </div>
 
-                <ChevronRight className={`w-4 h-4 shrink-0 transition-colors ${
-                  isSelected ? "text-primary" : "text-muted-foreground/40 group-hover:text-muted-foreground"
-                }`} />
+                {rim.id.startsWith("custom-") ? (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); removeCustomRim(rim.id); }}
+                    className="w-6 h-6 rounded-full flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                ) : (
+                  <ChevronRight className={`w-4 h-4 shrink-0 transition-colors ${
+                    isSelected ? "text-primary" : "text-muted-foreground/40 group-hover:text-muted-foreground"
+                  }`} />
+                )}
               </motion.button>
             );
           })}

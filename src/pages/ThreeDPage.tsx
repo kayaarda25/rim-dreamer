@@ -165,9 +165,9 @@ const ThreeDPage = () => {
         <div className="text-center mb-12">
           <p className="text-primary text-sm tracking-[0.2em] uppercase mb-3">
             <Box className="w-4 h-4 inline mr-2" />
-            3D-Modus
+            Try It
           </p>
-          <h1 className="font-display text-4xl md:text-5xl font-bold mb-3">3D-Modell erstellen</h1>
+          <h1 className="font-display text-4xl md:text-5xl font-bold mb-3">Probier es aus</h1>
           <p className="text-muted-foreground max-w-lg mx-auto">
             Lade Fotos aus verschiedenen Winkeln hoch für ein detailgetreues 3D-Modell deines Autos.
           </p>
