@@ -14,6 +14,9 @@ import threading
 from pathlib import Path
 from PIL import Image, ImageOps
 
+# Fix PyTorch 2.6+ weights_only default breaking nerfstudio export
+os.environ.setdefault("TORCH_FORCE_WEIGHTS_ONLY_LOAD", "0")
+
 CALLBACK_URL = os.environ.get("CALLBACK_URL")
 STORAGE_BASE = os.environ.get("STORAGE_BASE_URL")
 WORKER_DIR = Path("/tmp/reconstruction")
