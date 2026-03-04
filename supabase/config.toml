@@ -5,3 +5,9 @@ verify_jwt = false
 
 [functions.render-rims]
 verify_jwt = false
+
+[functions.generate-3d]
+verify_jwt = false
+
+[functions.check-3d-status]
+verify_jwt = false

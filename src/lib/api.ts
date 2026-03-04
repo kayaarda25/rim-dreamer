@@ -46,3 +46,42 @@ export async function renderRims(params: {
 
   return resp.json();
 }
+
+// 3D Model Generation
+export async function generate3DModel(imageDataUrl: string): Promise<{ task_id: string }> {
+  const resp = await fetch(`${SUPABASE_URL}/functions/v1/generate-3d`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ image_url: imageDataUrl }),
+  });
+
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({ error: "3D generation failed" }));
+    throw new Error(err.error || `3D generation failed (${resp.status})`);
+  }
+
+  return resp.json();
+}
+
+export interface ThreeDStatus {
+  status: "PENDING" | "IN_PROGRESS" | "SUCCEEDED" | "FAILED" | "EXPIRED";
+  progress: number;
+  model_urls: { glb?: string; fbx?: string; obj?: string; usdz?: string } | null;
+  thumbnail_url: string | null;
+  texture_urls: Array<{ base_color?: string }> | null;
+}
+
+export async function check3DStatus(taskId: string): Promise<ThreeDStatus> {
+  const resp = await fetch(`${SUPABASE_URL}/functions/v1/check-3d-status`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ task_id: taskId }),
+  });
+
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({ error: "Status check failed" }));
+    throw new Error(err.error || `Status check failed (${resp.status})`);
+  }
+
+  return resp.json();
+}
