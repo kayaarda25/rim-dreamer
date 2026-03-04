@@ -22,7 +22,6 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
-    // Build a detailed prompt for the image editing model
     const wheelDescriptions = (wheels || [])
       .map((w: { x: number; y: number; radius: number }, i: number) =>
         `Wheel ${i + 1}: center at ${w.x}% from left, ${w.y}% from top, radius ~${w.radius}% of image width`
@@ -36,6 +35,23 @@ Match the perspective, size, and lighting of the original wheels.
 The result should look photorealistic - as if the car actually has these new rims installed.
 Maintain the tire rubber around the new rims.`;
 
+    // Build content array - use data URIs for both images
+    const content: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
+      { type: "text", text: prompt },
+      { type: "image_url", image_url: { url: carImage } },
+    ];
+
+    // Only add rim image if it's a valid data URI or URL
+    if (rimImage.startsWith("data:") || rimImage.startsWith("http")) {
+      content.push({ type: "image_url", image_url: { url: rimImage } });
+    } else {
+      console.warn("Rim image is not a valid URL or data URI, skipping:", rimImage.substring(0, 50));
+    }
+
+    console.log("Sending render request with", content.length, "content items");
+    console.log("Car image type:", carImage.substring(0, 30));
+    console.log("Rim image type:", rimImage.substring(0, 30));
+
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -43,18 +59,13 @@ Maintain the tire rubber around the new rims.`;
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash-image",
+        model: "google/gemini-3-pro-image-preview",
         messages: [
           {
             role: "user",
-            content: [
-              { type: "text", text: prompt },
-              { type: "image_url", image_url: { url: carImage } },
-              { type: "image_url", image_url: { url: rimImage } },
-            ],
+            content,
           },
         ],
-        modalities: ["image", "text"],
       }),
     });
 
@@ -63,13 +74,13 @@ Maintain the tire rubber around the new rims.`;
       console.error("AI render error:", response.status, errText);
 
       if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again shortly." }), {
+        return new Response(JSON.stringify({ error: "Rate limit erreicht. Bitte versuche es in einer Minute erneut." }), {
           status: 429,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "AI credits exhausted. Please add funds." }), {
+        return new Response(JSON.stringify({ error: "AI-Credits aufgebraucht." }), {
           status: 402,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -78,16 +89,31 @@ Maintain the tire rubber around the new rims.`;
     }
 
     const data = await response.json();
-    console.log("Render response keys:", Object.keys(data));
+    console.log("Render response received");
 
-    // Extract the generated image
-    const generatedImage = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-    const textContent = data.choices?.[0]?.message?.content || "";
+    // Extract image from response
+    const choice = data.choices?.[0]?.message;
+    let generatedImage: string | null = null;
+
+    // Check various response formats
+    if (choice?.images?.[0]?.image_url?.url) {
+      generatedImage = choice.images[0].image_url.url;
+    } else if (choice?.content) {
+      // Check if content contains inline base64 image
+      const content = typeof choice.content === "string" ? choice.content : "";
+      const base64Match = content.match(/data:image\/[^;]+;base64,[A-Za-z0-9+/=]+/);
+      if (base64Match) {
+        generatedImage = base64Match[0];
+      }
+    }
+
+    const textContent = typeof choice?.content === "string" ? choice.content : "";
 
     if (!generatedImage) {
-      console.error("No image in response. Content:", textContent);
+      console.error("No image in response. Keys:", JSON.stringify(Object.keys(data)));
+      console.error("Choice keys:", choice ? JSON.stringify(Object.keys(choice)) : "no choice");
       return new Response(
-        JSON.stringify({ error: "AI could not generate the rim visualization. Try a different photo.", details: textContent }),
+        JSON.stringify({ error: "AI konnte keine Felgen-Vorschau erstellen. Versuche ein anderes Foto.", details: textContent }),
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

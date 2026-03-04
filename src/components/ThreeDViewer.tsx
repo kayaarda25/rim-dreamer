@@ -12,25 +12,28 @@ function CarModel({ url }: CarModelProps) {
   const { scene } = useGLTF(url);
   const ref = useRef<THREE.Group>(null);
 
-  // Fix dark materials - brighten everything
+  // Fix materials for better rendering
   useEffect(() => {
     scene.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
         const mesh = child as THREE.Mesh;
-        const mat = mesh.material as THREE.MeshStandardMaterial;
-        if (mat && mat.isMeshStandardMaterial) {
-          // Brighten dark materials
-          const hsl = { h: 0, s: 0, l: 0 };
-          mat.color.getHSL(hsl);
-          if (hsl.l < 0.15) {
-            mat.color.setHSL(hsl.h, hsl.s, Math.max(hsl.l, 0.25));
+        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        materials.forEach((mat) => {
+          if (mat && (mat as THREE.MeshStandardMaterial).isMeshStandardMaterial) {
+            const stdMat = mat as THREE.MeshStandardMaterial;
+            // Brighten very dark materials
+            const hsl = { h: 0, s: 0, l: 0 };
+            stdMat.color.getHSL(hsl);
+            if (hsl.l < 0.1) {
+              stdMat.color.setHSL(hsl.h, hsl.s, 0.2);
+            }
+            // Better car-like reflections
+            stdMat.metalness = Math.max(stdMat.metalness, 0.4);
+            stdMat.roughness = Math.min(stdMat.roughness, 0.5);
+            stdMat.envMapIntensity = 2.0;
+            stdMat.needsUpdate = true;
           }
-          // Increase metalness/roughness for better reflections
-          mat.metalness = Math.max(mat.metalness, 0.3);
-          mat.roughness = Math.min(mat.roughness, 0.7);
-          mat.envMapIntensity = 1.5;
-          mat.needsUpdate = true;
-        }
+        });
       }
     });
   }, [scene]);
@@ -39,7 +42,7 @@ function CarModel({ url }: CarModelProps) {
   const center = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3());
   const maxDim = Math.max(size.x, size.y, size.z);
-  const scale = 2.5 / maxDim;
+  const scale = 3 / maxDim;
 
   const bottomY = box.min.y;
   scene.position.set(
@@ -73,35 +76,16 @@ function LoadingFallback() {
 function GroundPlane() {
   return (
     <>
-      {/* Main ground */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
-        <circleGeometry args={[4, 64]} />
-        <meshStandardMaterial color="#e0e0e0" roughness={0.9} metalness={0.05} />
+        <circleGeometry args={[5, 64]} />
+        <meshStandardMaterial color="#e8e8e8" roughness={0.95} metalness={0.02} />
       </mesh>
-      {/* Outer ring for depth */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]}>
-        <ringGeometry args={[4, 6, 64]} />
-        <meshStandardMaterial color="#f0f0f0" roughness={1} metalness={0} transparent opacity={0.5} />
+        <ringGeometry args={[5, 8, 64]} />
+        <meshStandardMaterial color="#f2f2f2" roughness={1} metalness={0} transparent opacity={0.4} />
       </mesh>
     </>
   );
-}
-
-// Auto-rotate component
-function AutoRotate() {
-  const { camera } = useThree();
-  const angle = useRef(0);
-  
-  useFrame((_, delta) => {
-    angle.current += delta * 0.15;
-    const radius = camera.position.length();
-    const height = camera.position.y;
-    camera.position.x = Math.sin(angle.current) * radius * Math.cos(Math.atan2(height, radius));
-    camera.position.z = Math.cos(angle.current) * radius * Math.cos(Math.atan2(height, radius));
-    camera.lookAt(0, 0.5, 0);
-  });
-  
-  return null;
 }
 
 interface ThreeDViewerProps {
@@ -154,7 +138,7 @@ const ThreeDViewer = ({ modelUrl }: ThreeDViewerProps) => {
 
   if (loading) {
     return (
-      <div className="w-full aspect-video rounded-2xl overflow-hidden bg-muted/20 flex items-center justify-center">
+      <div className="w-full rounded-2xl overflow-hidden bg-muted/20 flex items-center justify-center" style={{ minHeight: "560px" }}>
         <div className="text-center">
           <Loader2 className="w-8 h-8 text-primary animate-spin mx-auto mb-2" />
           <p className="text-sm text-muted-foreground">3D-Modell wird geladen...</p>
@@ -165,7 +149,7 @@ const ThreeDViewer = ({ modelUrl }: ThreeDViewerProps) => {
 
   if (error || !blobUrl) {
     return (
-      <div className="w-full aspect-video rounded-2xl overflow-hidden bg-muted/20 flex items-center justify-center">
+      <div className="w-full rounded-2xl overflow-hidden bg-muted/20 flex items-center justify-center" style={{ minHeight: "560px" }}>
         <p className="text-sm text-destructive">{error || "Modell konnte nicht geladen werden"}</p>
       </div>
     );
@@ -175,58 +159,57 @@ const ThreeDViewer = ({ modelUrl }: ThreeDViewerProps) => {
     <div
       className="w-full rounded-2xl overflow-hidden"
       style={{
-        background: "radial-gradient(ellipse at center, #ffffff 0%, #e8e8e8 60%, #d0d0d0 100%)",
+        background: "radial-gradient(ellipse at center bottom, #ffffff 0%, #f0f0f0 50%, #e0e0e0 100%)",
+        minHeight: "560px",
         aspectRatio: "16/9",
-        minHeight: "480px",
       }}
     >
       <Canvas
-        camera={{ position: [4, 2, 4], fov: 35 }}
+        camera={{ position: [5, 1.2, 5], fov: 40 }}
         shadows
-        dpr={[1, 2]}
+        dpr={[2, 2]}
         gl={{
           antialias: true,
           toneMapping: THREE.ACESFilmicToneMapping,
-          toneMappingExposure: 1.8,
+          toneMappingExposure: 2.0,
           powerPreference: "high-performance",
-          pixelRatio: window.devicePixelRatio,
         }}
         style={{ width: "100%", height: "100%" }}
       >
-        {/* Strong ambient for overall brightness */}
-        <ambientLight intensity={1.0} />
-        {/* Key light */}
-        <directionalLight position={[5, 8, 3]} intensity={2.0} castShadow />
-        {/* Fill lights */}
-        <directionalLight position={[-4, 5, -2]} intensity={0.8} />
-        <directionalLight position={[0, 3, -5]} intensity={0.5} />
-        {/* Rim light from behind */}
-        <directionalLight position={[-2, 4, 5]} intensity={0.6} />
-        {/* Bottom fill to reduce dark underside */}
-        <pointLight position={[0, -1, 0]} intensity={0.3} />
+        {/* Bright, even lighting */}
+        <ambientLight intensity={1.2} />
+        {/* Main key light - slightly above eye level */}
+        <directionalLight position={[5, 4, 3]} intensity={2.5} castShadow />
+        {/* Fill from left */}
+        <directionalLight position={[-5, 3, 2]} intensity={1.0} />
+        {/* Back light */}
+        <directionalLight position={[0, 3, -5]} intensity={0.8} />
+        {/* Front fill */}
+        <directionalLight position={[0, 2, 6]} intensity={0.6} />
+        {/* Under-car fill */}
+        <pointLight position={[0, 0.2, 0]} intensity={0.4} />
 
         <Suspense fallback={<LoadingFallback />}>
           <CarModel url={blobUrl} />
           <GroundPlane />
           <ContactShadows
             position={[0, 0.01, 0]}
-            opacity={0.25}
-            scale={8}
-            blur={2.5}
+            opacity={0.2}
+            scale={10}
+            blur={2}
           />
           <Environment preset="studio" background={false} />
         </Suspense>
 
+        {/* Eye-level camera, only horizontal rotation */}
         <OrbitControls
           enablePan={false}
           enableZoom={true}
-          minDistance={3}
-          maxDistance={8}
-          minPolarAngle={Math.PI / 3.5}
-          maxPolarAngle={Math.PI / 2.8}
-          minAzimuthAngle={-Infinity}
-          maxAzimuthAngle={Infinity}
-          target={[0, 0.5, 0]}
+          minDistance={4}
+          maxDistance={10}
+          minPolarAngle={Math.PI / 2.3}
+          maxPolarAngle={Math.PI / 2.1}
+          target={[0, 0.6, 0]}
         />
       </Canvas>
     </div>
