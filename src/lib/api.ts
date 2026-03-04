@@ -48,11 +48,19 @@ export async function renderRims(params: {
 }
 
 // 3D Model Generation
-export async function generate3DModel(imageDataUrl: string): Promise<{ task_id: string }> {
+export async function generate3DModel(
+  imageDataUrl: string,
+  additionalImages?: string[]
+): Promise<{ task_id: string }> {
+  const body: Record<string, unknown> = { image_url: imageDataUrl };
+  if (additionalImages && additionalImages.length > 0) {
+    body.additional_images = additionalImages;
+  }
+
   const resp = await fetch(`${SUPABASE_URL}/functions/v1/generate-3d`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ image_url: imageDataUrl }),
+    body: JSON.stringify(body),
   });
 
   if (!resp.ok) {
