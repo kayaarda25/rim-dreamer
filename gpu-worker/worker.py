@@ -38,7 +38,9 @@ def download_files(project_id, files, work_dir):
         url = f["url"]
         ext = url.rsplit(".", 1)[-1] if "." in url else "jpg"
         out_path = raw_dir / f"{i:04d}.{ext}"
-        resp = requests.get(url, timeout=60)
+        resp = requests.get(url, timeout=60, headers={
+            "User-Agent": "Mozilla/5.0 (compatible; RimDreamer/1.0)"
+        })
         resp.raise_for_status()
         out_path.write_bytes(resp.content)
         print(f"Downloaded {i+1}/{len(files)}: {out_path.name}")
