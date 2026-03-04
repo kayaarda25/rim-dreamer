@@ -28,9 +28,8 @@ serve(async (req) => {
       image_url,
       ai_model: "meshy-6",
       enable_pbr: true,
-      should_remesh: true,
-      topology: "quad",
-      target_polycount: 50000,
+      should_remesh: false,        // false = highest precision triangular mesh
+      save_pre_remeshed_model: true,
       should_texture: true,
       symmetry_mode: "auto",
       image_enhancement: true,

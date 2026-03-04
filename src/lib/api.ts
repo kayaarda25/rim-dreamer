@@ -74,7 +74,7 @@ export async function generate3DModel(
 export interface ThreeDStatus {
   status: "PENDING" | "IN_PROGRESS" | "SUCCEEDED" | "FAILED" | "EXPIRED";
   progress: number;
-  model_urls: { glb?: string; fbx?: string; obj?: string; usdz?: string } | null;
+  model_urls: { glb?: string; fbx?: string; obj?: string; usdz?: string; pre_remeshed_glb?: string } | null;
   thumbnail_url: string | null;
   texture_urls: Array<{ base_color?: string }> | null;
 }
