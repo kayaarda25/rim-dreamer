@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Download, Share2, MessageSquare, ArrowLeft, Bookmark } from "lucide-react";
+import { Download, Share2, MessageSquare, ArrowLeft, Bookmark, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import { renderRims } from "@/lib/api";
 import type { Rim } from "@/data/rims";
 
 const ResultPage = () => {
@@ -11,21 +12,87 @@ const ResultPage = () => {
   const [rim, setRim] = useState<Rim | null>(null);
   const [sliderPos, setSliderPos] = useState(50);
   const [rendering, setRendering] = useState(true);
+  const [renderedImage, setRenderedImage] = useState<string | null>(null);
+  const [renderError, setRenderError] = useState<string | null>(null);
+  const [statusText, setStatusText] = useState("Preparing AI rendering...");
 
   useEffect(() => {
     const img = sessionStorage.getItem("wheelVision_carImage");
     const rimData = sessionStorage.getItem("wheelVision_selectedRim");
+    const wheelsData = sessionStorage.getItem("wheelVision_wheels");
+
     if (!img || !rimData) {
       navigate("/upload");
       return;
     }
+
     setCarImage(img);
-    setRim(JSON.parse(rimData));
-    // Simulate rendering
-    setTimeout(() => setRendering(false), 2500);
+    const parsedRim = JSON.parse(rimData);
+    setRim(parsedRim);
+    const wheels = wheelsData ? JSON.parse(wheelsData) : [];
+
+    // Call real AI rendering
+    const doRender = async () => {
+      try {
+        setStatusText("AI is replacing your rims...");
+
+        // We need the rim image as a data URL. The rim.image is a module import (local path).
+        // Fetch it and convert to base64.
+        const rimImageUrl = parsedRim.image;
+        let rimBase64 = rimImageUrl;
+
+        // If it's not already a data URL, fetch and convert
+        if (!rimImageUrl.startsWith("data:")) {
+          try {
+            const resp = await fetch(rimImageUrl);
+            const blob = await resp.blob();
+            rimBase64 = await new Promise<string>((resolve) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result as string);
+              reader.readAsDataURL(blob);
+            });
+          } catch {
+            // If fetch fails, use the URL directly
+            rimBase64 = rimImageUrl;
+          }
+        }
+
+        setStatusText("Generating photorealistic visualization...");
+
+        const result = await renderRims({
+          carImage: img,
+          rimImage: rimBase64,
+          rimName: parsedRim.name,
+          wheels,
+        });
+
+        setRenderedImage(result.renderedImage);
+        toast.success("AI rendering complete!");
+      } catch (err) {
+        console.error("Render error:", err);
+        setRenderError(err instanceof Error ? err.message : "Rendering failed");
+        toast.error("AI rendering failed. Showing overlay preview instead.");
+      } finally {
+        setRendering(false);
+      }
+    };
+
+    doRender();
   }, [navigate]);
 
+  const handleDownload = () => {
+    const imageToDownload = renderedImage || carImage;
+    if (!imageToDownload) return;
+    const link = document.createElement("a");
+    link.href = imageToDownload;
+    link.download = `wheelvision-${rim?.name || "custom"}.png`;
+    link.click();
+    toast.success("Image downloaded!");
+  };
+
   if (!carImage || !rim) return null;
+
+  const wheels = JSON.parse(sessionStorage.getItem("wheelVision_wheels") || "[]");
 
   return (
     <div className="min-h-screen pt-24 pb-16 container px-6">
@@ -54,7 +121,8 @@ const ResultPage = () => {
               <div className="text-center">
                 <div className="w-16 h-16 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-6" />
                 <p className="font-display text-xl font-semibold mb-2">Rendering your visualization</p>
-                <p className="text-muted-foreground text-sm">Applying {rim.name} to your car...</p>
+                <p className="text-muted-foreground text-sm">{statusText}</p>
+                <p className="text-muted-foreground text-xs mt-2">This may take 15-30 seconds...</p>
               </div>
             </div>
           ) : (
@@ -73,25 +141,32 @@ const ResultPage = () => {
               {/* Before (original) */}
               <img src={carImage} alt="Original" className="absolute inset-0 w-full h-full object-contain" />
 
-              {/* After (with rims overlaid) */}
+              {/* After */}
               <div
                 className="absolute inset-0 overflow-hidden"
                 style={{ clipPath: `inset(0 ${100 - sliderPos}% 0 0)` }}
               >
-                <img src={carImage} alt="With rims" className="w-full h-full object-contain" />
-                {/* Rim overlays */}
-                <div
-                  className="absolute rounded-full overflow-hidden shadow-lg"
-                  style={{ left: "14%", top: "52%", width: "16%", aspectRatio: "1" }}
-                >
-                  <img src={rim.image} alt={rim.name} className="w-full h-full object-cover" />
-                </div>
-                <div
-                  className="absolute rounded-full overflow-hidden shadow-lg"
-                  style={{ left: "70%", top: "52%", width: "16%", aspectRatio: "1" }}
-                >
-                  <img src={rim.image} alt={rim.name} className="w-full h-full object-cover" />
-                </div>
+                {renderedImage ? (
+                  <img src={renderedImage} alt="AI rendered with new rims" className="w-full h-full object-contain" />
+                ) : (
+                  <>
+                    <img src={carImage} alt="With rims overlay" className="w-full h-full object-contain" />
+                    {wheels.map((w: { x: number; y: number; radius: number }, i: number) => (
+                      <div
+                        key={i}
+                        className="absolute rounded-full overflow-hidden shadow-lg"
+                        style={{
+                          left: `${w.x - w.radius}%`,
+                          top: `${w.y - w.radius}%`,
+                          width: `${w.radius * 2}%`,
+                          height: `${w.radius * 2}%`,
+                        }}
+                      >
+                        <img src={rim.image} alt={rim.name} className="w-full h-full object-cover" />
+                      </div>
+                    ))}
+                  </>
+                )}
               </div>
 
               {/* Slider line */}
@@ -109,11 +184,29 @@ const ResultPage = () => {
                 Before
               </div>
               <div className="absolute top-4 right-4 bg-primary/80 backdrop-blur px-3 py-1 rounded-full text-xs font-semibold text-primary-foreground">
-                After
+                {renderedImage ? "AI Rendered" : "Overlay Preview"}
               </div>
             </div>
           )}
         </div>
+
+        {/* Error notice */}
+        {renderError && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="glass-surface rounded-xl p-4 mb-6 border border-destructive/30"
+          >
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-destructive mt-0.5 shrink-0" />
+              <div>
+                <p className="font-display font-semibold text-sm">AI rendering encountered an issue</p>
+                <p className="text-muted-foreground text-xs mt-1">{renderError}</p>
+                <p className="text-muted-foreground text-xs mt-1">Showing overlay preview instead. The final product will look more realistic.</p>
+              </div>
+            </div>
+          </motion.div>
+        )}
 
         {/* Rim info + actions */}
         <div className="grid md:grid-cols-2 gap-6">
@@ -134,7 +227,7 @@ const ResultPage = () => {
             <p className="font-display font-semibold text-sm mb-4">Actions</p>
             <div className="grid grid-cols-2 gap-3">
               {[
-                { icon: Download, label: "Download", action: () => toast.success("Image downloaded!") },
+                { icon: Download, label: "Download", action: handleDownload },
                 { icon: Share2, label: "Share", action: () => { navigator.clipboard.writeText(window.location.href); toast.success("Link copied!"); } },
                 { icon: MessageSquare, label: "Request Quote", action: () => toast.success("Quote request sent!") },
                 { icon: Bookmark, label: "Save Config", action: () => toast.success("Configuration saved!") },

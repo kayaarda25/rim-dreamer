@@ -1,0 +1,7 @@
+project_id = "yqjdzziqdimflzytcpbg"
+
+[functions.detect-wheels]
+verify_jwt = false
+
+[functions.render-rims]
+verify_jwt = false
