@@ -1,7 +1,9 @@
 import { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Upload, Image, CheckCircle, AlertCircle, Move } from "lucide-react";
+import { Upload, CheckCircle, AlertCircle, Move, Car } from "lucide-react";
+import { toast } from "sonner";
+import { detectWheels, type WheelDetection } from "@/lib/api";
 
 interface WheelMarker {
   x: number;
@@ -16,27 +18,66 @@ const UploadPage = () => {
   const [detecting, setDetecting] = useState(false);
   const [detected, setDetected] = useState(false);
   const [wheels, setWheels] = useState<WheelMarker[]>([]);
+  const [carModel, setCarModel] = useState<string | null>(null);
+  const [confidence, setConfidence] = useState(0);
   const [adjustMode, setAdjustMode] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleFile = useCallback((file: File) => {
+  const handleFile = useCallback(async (file: File) => {
     if (!file.type.startsWith("image/")) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setImage(e.target?.result as string);
-      setDetected(false);
-      setWheels([]);
-      // Simulate AI wheel detection
-      setDetecting(true);
-      setTimeout(() => {
-        setWheels([
-          { x: 22, y: 68, radius: 8 },
-          { x: 78, y: 68, radius: 8 },
-        ]);
-        setDetecting(false);
-        setDetected(true);
-      }, 2000);
-    };
-    reader.readAsDataURL(file);
+
+    // Resize image to reduce payload size for the API
+    const dataUrl = await new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const maxDim = 1200;
+          let w = img.width, h = img.height;
+          if (w > maxDim || h > maxDim) {
+            const scale = maxDim / Math.max(w, h);
+            w = Math.round(w * scale);
+            h = Math.round(h * scale);
+          }
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext("2d")!;
+          ctx.drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL("image/jpeg", 0.85));
+        };
+        img.src = e.target?.result as string;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    setImage(dataUrl);
+    setDetected(false);
+    setWheels([]);
+    setError(null);
+    setCarModel(null);
+    setDetecting(true);
+
+    try {
+      const result: WheelDetection = await detectWheels(dataUrl);
+      setWheels(result.wheels);
+      setCarModel(result.car_model);
+      setConfidence(result.confidence);
+      setDetected(true);
+      toast.success(`Detected ${result.wheels.length} wheel(s)${result.car_model ? ` on ${result.car_model}` : ""}`);
+    } catch (err) {
+      console.error("Detection error:", err);
+      setError(err instanceof Error ? err.message : "Detection failed");
+      toast.error("Wheel detection failed. You can manually adjust wheel positions.");
+      // Provide default fallback positions
+      setWheels([
+        { x: 22, y: 68, radius: 8 },
+        { x: 78, y: 68, radius: 8 },
+      ]);
+      setDetected(true);
+    } finally {
+      setDetecting(false);
+    }
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -49,6 +90,7 @@ const UploadPage = () => {
     if (image) {
       sessionStorage.setItem("wheelVision_carImage", image);
       sessionStorage.setItem("wheelVision_wheels", JSON.stringify(wheels));
+      if (carModel) sessionStorage.setItem("wheelVision_carModel", carModel);
       navigate("/catalog");
     }
   };
@@ -130,8 +172,8 @@ const UploadPage = () => {
                   <div className="absolute inset-0 bg-background/60 backdrop-blur-sm flex items-center justify-center">
                     <div className="text-center">
                       <div className="w-12 h-12 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                      <p className="font-display font-semibold">Detecting wheels...</p>
-                      <p className="text-muted-foreground text-sm">AI is analyzing your photo</p>
+                      <p className="font-display font-semibold">AI is detecting wheels...</p>
+                      <p className="text-muted-foreground text-sm">Analyzing your photo with computer vision</p>
                     </div>
                   </div>
                 )}
@@ -145,10 +187,24 @@ const UploadPage = () => {
                       <motion.div
                         initial={{ opacity: 0, x: -10 }}
                         animate={{ opacity: 1, x: 0 }}
-                        className="flex items-center gap-2 text-sm"
+                        className="flex flex-col gap-1"
                       >
-                        <CheckCircle className="w-4 h-4 text-primary" />
-                        <span className="text-primary font-medium">{wheels.length} wheels detected</span>
+                        <div className="flex items-center gap-2 text-sm">
+                          <CheckCircle className="w-4 h-4 text-primary" />
+                          <span className="text-primary font-medium">{wheels.length} wheel(s) detected</span>
+                          {confidence > 0 && (
+                            <span className="text-muted-foreground text-xs">({Math.round(confidence * 100)}% confidence)</span>
+                          )}
+                        </div>
+                        {carModel && (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <Car className="w-3 h-3" />
+                            <span>{carModel}</span>
+                          </div>
+                        )}
+                        {error && (
+                          <p className="text-destructive text-xs">{error} — using default positions</p>
+                        )}
                       </motion.div>
                     )}
                   </div>
@@ -164,7 +220,7 @@ const UploadPage = () => {
                       </button>
                     )}
                     <button
-                      onClick={() => { setImage(null); setDetected(false); setWheels([]); }}
+                      onClick={() => { setImage(null); setDetected(false); setWheels([]); setError(null); setCarModel(null); }}
                       className="px-4 py-2 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground transition-colors"
                     >
                       Re-upload
@@ -199,6 +255,7 @@ const UploadPage = () => {
                 <li>• Take the photo from the side at wheel height</li>
                 <li>• Ensure the full car is visible in the frame</li>
                 <li>• Good lighting produces better results</li>
+                <li>• AI will automatically detect your car model and wheel positions</li>
               </ul>
             </div>
           </div>
