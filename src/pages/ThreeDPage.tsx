@@ -109,6 +109,14 @@ const ThreeDPage = () => {
     setSelectedRim(rim);
     if (!image) return;
 
+    // Custom uploaded rims: only apply to 3D viewer (no AI rendering)
+    if (rim.id.startsWith("custom-")) {
+      setShowRendered(false);
+      setRenderedImage(null);
+      toast.success(`${rim.name} ausgewählt — Farbe wird auf 3D-Modell angewendet`);
+      return;
+    }
+
     setRimRendering(true);
     setRenderedImage(null);
     try {
