@@ -153,7 +153,7 @@ const ThreeDPage = () => {
     if (pollRef.current) clearInterval(pollRef.current);
   };
 
-  const modelUrl = status?.model_urls?.glb;
+  const modelUrl = status?.model_urls?.pre_remeshed_glb || status?.model_urls?.glb;
 
   return (
     <div className="min-h-screen pt-24 pb-16 container px-6">
@@ -196,7 +196,7 @@ const ThreeDPage = () => {
                 ) : (
                   <div className="relative">
                     <div className="rounded-2xl overflow-hidden border border-border shadow-lg">
-                      <ThreeDViewer modelUrl={modelUrl} />
+                      <ThreeDViewer modelUrl={modelUrl} rimColor={selectedRim?.color} />
                     </div>
                     {renderedImage && (
                       <button
