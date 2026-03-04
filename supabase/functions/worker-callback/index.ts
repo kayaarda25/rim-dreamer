@@ -11,7 +11,70 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
     const body = await req.json();
+    const { action } = body;
+
+    // Handle signed upload URL requests
+    if (action === "get_upload_url") {
+      const { path } = body;
+      if (!path) {
+        return new Response(JSON.stringify({ error: "path is required" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data, error } = await supabase.storage
+        .from("reconstructions")
+        .createSignedUploadUrl(path);
+
+      if (error) throw new Error(error.message);
+
+      return new Response(JSON.stringify({ signed_url: data.signedUrl, token: data.token }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Handle file upload via callback (worker sends file here)
+    if (action === "upload_file") {
+      const { path, base64_data, content_type } = body;
+      if (!path || !base64_data) {
+        return new Response(JSON.stringify({ error: "path and base64_data required" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Decode base64 to binary
+      const binaryStr = atob(base64_data);
+      const bytes = new Uint8Array(binaryStr.length);
+      for (let i = 0; i < binaryStr.length; i++) {
+        bytes[i] = binaryStr.charCodeAt(i);
+      }
+
+      const { error } = await supabase.storage
+        .from("reconstructions")
+        .upload(path, bytes.buffer, {
+          contentType: content_type || "application/octet-stream",
+          upsert: true,
+        });
+
+      if (error) throw new Error(error.message);
+
+      const { data: urlData } = supabase.storage
+        .from("reconstructions")
+        .getPublicUrl(path);
+
+      return new Response(JSON.stringify({ public_url: urlData.publicUrl }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Default: status update callback
     const { project_id, status, progress_stage, model_url, preview_url, error_message } = body;
 
     if (!project_id) {
@@ -20,10 +83,6 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
 
     const update: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
